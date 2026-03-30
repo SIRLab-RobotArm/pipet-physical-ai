@@ -1,5 +1,0 @@
-[1]: https://huggingface.co/docs/lerobot/il_robots?utm_source=chatgpt.com "Imitation Learning on Real-World Robots"
-[2]: https://huggingface.co/docs/lerobot/installation?utm_source=chatgpt.com "Installation"
-[3]: https://huggingface.co/docs/lerobot/il_robots "Imitation Learning on Real-World Robots · Hugging Face"
-[4]: https://huggingface.co/docs/lerobot/act "ACT (Action Chunking with Transformers) · Hugging Face"
-[5]: https://huggingface.co/docs/lerobot/en/integrate_hardware "Bring Your Own Hardware · Hugging Face"
