@@ -1,3 +1,0 @@
-[submodule "ros2_ws/src/indy7_ros2"]
-	path = ros2_ws/src/indy7_ros2
-	url = https://github.com/neuromeka-robotics/indy-ros2.git

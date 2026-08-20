@@ -38,6 +38,19 @@ from lerobot.datasets.video_utils import (
 from lerobot.utils.constants import HF_LEROBOT_HOME, LOOKAHEAD_BACKTRACKTABLE, LOOKBACK_BACKTRACKTABLE
 
 
+def _episode_index_eq(a, b) -> bool:
+    """Compare episode_index values from parquet/HF rows without bool(tensor) ambiguity."""
+
+    def _to_int(x):
+        if isinstance(x, torch.Tensor):
+            return int(x.detach().cpu().reshape(-1)[0].item())
+        if isinstance(x, np.generic):
+            return int(x)
+        return int(x)
+
+    return _to_int(a) == _to_int(b)
+
+
 class LookBackError(Exception):
     """
     Exception raised when trying to look back in the history of a Backtrackable object.
@@ -461,8 +474,12 @@ class StreamingLeRobotDataset(torch.utils.data.IterableDataset):
 
         updates = []  # list of "updates" to apply to the item retrieved from hf_dataset (w/o camera features)
 
-        # Get episode index from the item
+        # Get episode index from the item (arrow/HF may expose as tensor or numpy scalar)
         ep_idx = item["episode_index"]
+        if isinstance(ep_idx, torch.Tensor):
+            ep_idx = int(ep_idx.detach().cpu().reshape(-1)[0].item())
+        elif isinstance(ep_idx, np.generic):
+            ep_idx = int(ep_idx)
 
         # "timestamp" restarts from 0 for each episode, whereas we need a global timestep within the single .mp4 file (given by index/fps)
         current_ts = item["index"] / self.fps
@@ -509,7 +526,14 @@ class StreamingLeRobotDataset(torch.utils.data.IterableDataset):
         for update in updates:
             result.update(update)
 
-        result["task"] = self.meta.tasks.iloc[item["task_index"]].name
+        _ti = item["task_index"]
+        if isinstance(_ti, torch.Tensor):
+            _ti = int(_ti.detach().cpu().reshape(-1)[0].item())
+        elif isinstance(_ti, np.generic):
+            _ti = int(_ti)
+        else:
+            _ti = int(_ti)
+        result["task"] = self.meta.tasks.iloc[_ti].name
 
         yield result
 
@@ -608,7 +632,7 @@ class StreamingLeRobotDataset(torch.utils.data.IterableDataset):
                         past_item = dataset_iterator.peek_back(steps_back)
                         past_item = item_to_torch(past_item)
 
-                        if past_item["episode_index"] == current_episode_idx:
+                        if _episode_index_eq(past_item["episode_index"], current_episode_idx):
                             delta_results[delta] = (past_item[key], False)
                             last_successful_frame = past_item[key]
 
@@ -635,7 +659,7 @@ class StreamingLeRobotDataset(torch.utils.data.IterableDataset):
                         future_item = dataset_iterator.peek_ahead(delta)
                         future_item = item_to_torch(future_item)
 
-                        if future_item["episode_index"] == current_episode_idx:
+                        if _episode_index_eq(future_item["episode_index"], current_episode_idx):
                             delta_results[delta] = (future_item[key], False)
                             last_successful_frame = future_item[key]
 

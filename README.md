@@ -1,216 +1,103 @@
-# Pipet Physical AI (ROS2 + AI)
+# Indy7 RGB-only grasp data collection
 
-이 문서는 프로젝트 전체 흐름을 한 번에 이해하기 위한 통합 README다.
+Indy7, Mark7 그리퍼, 고정 overhead RealSense RGB 카메라를 이용해 PVC 파지·들어올림
+시연을 수집하고 ACT를 학습·평가하는 저장소다. 본 실험은 Depth를 사용하지 않는다.
 
-```text
-직접교시(ROS2) 수집 -> NPZ 저장 -> LeRobotDataset 변환 -> LeRobot 학습 -> 실제 로봇 추론 배포
-```
+> **현재 진행 상태:** 새 재수집 데이터 220개, LeRobot 변환, A~D×3 seeds의 ACT
+> 본 학습 12개가 완료되었고 실로봇 파일럿 1회가 성공했다. 본 평가를 시작하기 전에
+> 남은 작업과 정확한 산출물 경로는 [프로젝트 인수인계](docs/HANDOFF.md)를 먼저 읽는다.
+> 아래 수집 명령의 기본 `episodes/main` 경로는 과거 운영 설명이며 완료된 재수집본은
+> `episodes/main_recollection_20260817`에 보존되어 있다.
 
----
+## 빌드
 
-## 1. 프로젝트 개요
-
-Indy7 로봇팔 + Mark7 로봇손 + RealSense D435(손목/오버헤드) 2대를 사용해
-피펫 조작을 학습/배포하는 Physical AI 프로젝트다.
-
-### 시스템 구성
-| 항목 | 내용 |
-|---|---|
-| 로봇팔 | Neuromeka Indy7 |
-| 로봇손 | Mand.ro Mark7 |
-| 카메라 | RealSense D435 x 2 (wrist, overhead) |
-| OS/ROS | Ubuntu 22.04 / ROS2 Humble |
-| DDS | Cyclone DDS |
-
----
-
-## 2. 데이터 수집은 어떻게 하나?
-
-데이터 수집은 ROS2에서 수행하고, 결과는 `episodes/episode_*.npz`로 저장된다.
-
-### 2-0. 네트워크 설정 (최초 1회)
-
-Indy7(`192.168.1.10`)과 통신하려면 PC에 같은 대역의 고정 IP를 설정해야 한다.
-
-**방법 A: USB 이더넷 어댑터 직접 연결 (권장)**
 ```bash
-sudo nmcli con mod enx00e04c360046 ipv4.addresses 192.168.1.100/24 ipv4.method manual
-sudo nmcli con up enx00e04c360046
-ping 192.168.1.10
-```
-
-> `unknown connection` 오류 시, 기존 connection 수정 대신 새 connection을 생성:
-> ```bash
-> sudo nmcli con add type ethernet ifname enx00e04c360046 con-name indy7-static \
->   ipv4.addresses 192.168.1.100/24 ipv4.method manual \
->   ipv6.method ignore autoconnect yes
-> sudo nmcli con up indy7-static
-> ```
-
-**방법 B: 공유기 경유 연결**
-
-로봇과 PC를 같은 공유기에 연결한 후, PC 내장 이더넷(`enp0s31f6`)에 로봇 대역 IP를 추가한다.
-```bash
-
-# 임시 설정 (재부팅 시 사라짐) 이거 먼저 해주세요
-sudo ip addr add 192.168.1.100/24 dev enp0s31f6
-
-# 영구 설정
-sudo nmcli con mod enp0s31f6 +ipv4.addresses 192.168.1.100/24
-
-# 이걸로 연결 확인
-ping 192.168.1.10
-```
-
-> **트러블슈팅:** ping 실패 → ① 로봇 컨트롤러 전원 ② 케이블 ③ `ip addr show`에서 IP 할당 확인. gRPC 실패(`nc -zv 192.168.1.10 20001`) → 컨트롤러 재부팅 후 2~3분 대기.
-
-### 2-1. 빌드
-```bash
-cd <repo_root>
-source /opt/ros/humble/setup.bash
-export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-colcon build
+cd /opt/workspace/sirlab-paper-indy7-grip/ros2_ws
+source /opt/ros/jazzy/setup.bash
+colcon build --symlink-install
 source install/setup.bash
 ```
 
-# 여기 보고 터미널 두개 열어서 각각 실행하면 됩니다!!!!
-### 2-2. 통합 수집 실행
-터미널 1 (백엔드):
-```bash
-cd <repo_root>
-source /opt/ros/humble/setup.bash && source install/setup.bash
-export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-ros2 launch pipet_bringup data_collection.launch.py indy_ip:=192.168.1.10
-```
+## 실행 alias
 
-터미널 2 (텔레옵):
-```bash
-cd <repo_root>
-source /opt/ros/humble/setup.bash && source install/setup.bash
-export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-ros2 run pipet_system_teleop system_teleop_node
-```
-
-### 2-3. 텔레옵 키
-| 키 | 동작 |
-|---|---|
-| SPACE | 녹화 시작/중지 (중지 시 Y/N 라벨링) 
-| D / d | direct teaching ON/OFF |
-| H | Indy7 홈 이동 |
-| G / O / P / R | Mark7 grasp/open/press/release |
-| E | 에러 복구 |
-| S | 상태 확인 |
-| Q | 종료 |
-
-### 2-4. NPZ 저장 형식
-파일명: `episode_YYYYMMDD_HHMMSS_success.npz` 또는 `_fail.npz`
-
-주요 키:
-- `timestamps` `(N,)`
-- `joint_positions`, `joint_velocities`, `joint_efforts` `(N,6)`
-- `wrist_rgb_images`, `wrist_depth_images`
-- `overhead_rgb_images`, `overhead_depth_images`
-- `gripper_actions` `(N,)` (`0 hold`, `1 grasp`, `2 open`, `3 press`, `4 release`)
-- `success` `()`
-
----
-
-## 3. 학습은 어디서 일어나나?
-
-학습 엔진은 LeRobot(`lerobot-train`)이고, 이 레포는 변환/실행 스크립트를 제공한다.
-
-### 3-1. NPZ -> LeRobotDataset 변환
-```bash
-python ai/data_conversion/npz_to_lerobot/convert.py \
-  --episodes_dir <episodes_dir> \
-  --output_dir <lerobot_dataset_dir> \
-  --output_repo_id pipet_dataset \
-  --fps 15 \
-  --task "Pick up the pipette"
-```
-
-### 3-2. 학습 실행 (ACT baseline)
-```bash
-python ai/lerobot/run_lerobot_train.py \
-  --episodes_dir <episodes_dir> \
-  --dataset_output_dir <lerobot_dataset_dir> \
-  --dataset_repo_id pipet_dataset \
-  --output_dir outputs/train/act_pipet \
-  --device cuda
-```
-
-`--skip_convert`를 주면 기존 변환 데이터셋으로 학습만 수행할 수 있다.
-
----
-
-## 4. 학습 후 실제 로봇 적용(추론)
-
-추론 노드는 `pipet_inference` 패키지에서 동작한다.
+다음 alias는 `/home/sirlab/.bash_aliases`에 등록되어 있다. 새 터미널에서 alias가
+보이지 않으면 `source ~/.bashrc`를 한 번 실행한다.
 
 ```bash
-ros2 launch pipet_bringup inference.launch.py \
-  policy_path:=<trained_policy_dir> \
-  dataset_root:=<lerobot_dataset_dir> \
-  dataset_repo_id:=pipet_dataset \
-  task:="Pick up the pipette" \
-  inference_hz:=15.0
+alias grip_indy='cd /opt/workspace/sirlab-paper-indy7-grip && source /opt/ros/jazzy/setup.bash && source ros2_ws/install/setup.bash && export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST && ros2 run indy_driver indy_driver.py --ros-args -p indy_ip:=192.168.1.10 -p indy_type:=indy7 -p enforce_workspace:=false -p vel_ratio:=0.8 -p acc_ratio:=7.0'
+
+alias grip_mark7='cd /opt/workspace/sirlab-paper-indy7-grip && source /opt/ros/jazzy/setup.bash && source ros2_ws/install/setup.bash && export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST && ros2 launch pipet_hand_mark7_driver mark7_hardware.launch.py port:=/dev/serial/by-id/usb-Arduino_LLC_Arduino_Micro-if00 use_mock_hardware:=false use_rviz:=false'
+
+alias grip_gripper='cd /opt/workspace/sirlab-paper-indy7-grip && source /opt/ros/jazzy/setup.bash && source ros2_ws/install/setup.bash && export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST && ros2 run pipet_hand_mark7_teleop grip_preset_node --ros-args --params-file /opt/workspace/sirlab-paper-indy7-grip/ros2_ws/src/mark7/pipet_hand_mark7_driver/config/grip_presets.yaml'
+
+alias grip_xbox='cd /opt/workspace/sirlab-paper-indy7-grip && source /opt/ros/jazzy/setup.bash && source ros2_ws/install/setup.bash && export PYTHONPATH=/opt/workspace/yuykim/ros_pydeps:${PYTHONPATH:-} && export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST && ros2 run indy7_teleop xbox_servo_node --ros-args -p indy_ip:=192.168.1.10 -p input_backend:=linuxevdev -p event_device:=/dev/input/by-id/usb-Microsoft_Controller_3039373130333239373237343238-event-joystick -p linear_step_mm:=0.5 -p debug_input:=true'
 ```
 
-현재 구현:
-- 입력: `joint_states`, 손목 RGB, 오버헤드 RGB
-- 출력: Indy7 trajectory 토픽 + Mark7 프리셋 서비스 호출
+실기 수집은 각 명령을 서로 다른 터미널에서 다음 순서로 실행한다.
 
----
-
-## 5. 가상환경에서도 동일 데이터 수집 시도
-
-현재 레포에는 시뮬레이터 완전 통합 대신, 동일 토픽 계약 검증용 리플레이 노드가 있다.
-
-- `pipet_inference/virtual_episode_replay_node.py`
-  - 기존 `episode_*.npz`를 읽어 `joint_states`/카메라 토픽 재생
-  - `data_collector/log_*` 서비스도 호출해 collector와 동일 파이프라인 검증
-
-실행:
 ```bash
-ros2 run pipet_inference virtual_episode_replay_node \
-  --ros-args -p episode_npz_path:=<episode_npz_path> -p auto_record:=true
+grip_indy
+grip_mark7
+grip_gripper
+grip_xbox
 ```
 
----
+## P1~P9 데이터 수집
 
-## 6. 파일 구조
+RealSense Viewer는 카메라를 점유하므로 먼저 닫는다. 수집 세션마다 환경변수를 지정하고
+실제 PVC 위치와 같은 스크립트 하나만 실행한다.
 
-```text
-pipet-physical-ai/
-├── docs/
-│   ├── architecture.md
-│   ├── interface_spec.md
-│   └── ai/
-│      ├── ai_architecture.md
-│      └── lerobot_architecture.md
-├── ai/
-│   ├── README.md
-│   ├── data_conversion/npz_to_lerobot/convert.py
-│   ├── lerobot/run_lerobot_train.py
-│   ├── lerobot_source/lerobot/
-│   └── indy7_lerobot/            # 참고/레거시 스크립트
-└── ros2_ws/
-   ├── README.md
-   └── src/
-      ├── pipet_bringup/
-      ├── pipet_data_collector/
-      ├── pipet_system_teleop/
-      ├── pipet_inference/
-      ├── indy7_ros2/
-      └── mark7/
+```bash
+cd /opt/workspace/sirlab-paper-indy7-grip
+export GRIP_SESSION_ID=main_20260810
+export GRIP_OPERATOR_ID=sirlab
+
+./scripts/collection/collect_p1.sh  # grid_1 -> episodes/main/p1
+./scripts/collection/collect_p2.sh  # grid_2 -> episodes/main/p2
+./scripts/collection/collect_p3.sh  # grid_3 -> episodes/main/p3
+./scripts/collection/collect_p4.sh  # grid_4 -> episodes/main/p4
+./scripts/collection/collect_p5.sh  # grid_5 -> episodes/main/p5
+./scripts/collection/collect_p6.sh  # grid_6 -> episodes/main/p6
+./scripts/collection/collect_p7.sh  # grid_7 -> episodes/main/p7
+./scripts/collection/collect_p8.sh  # grid_8 -> episodes/main/p8
+./scripts/collection/collect_p9.sh  # grid_9 -> episodes/main/p9
 ```
 
----
+한 번에 한 위치의 수집 스크립트만 실행한다. 스크립트를 실행하면 RGB 미리보기 창이
+자동으로 열린다. 미리보기 없이 실행해야 할 때만 직접 launch하며
+`show_camera:=false`를 지정한다.
 
-## 7. 상세 문서
+### 한 episode 수집 순서
 
-- 전체 시스템: `docs/architecture.md`
-- ROS2 인터페이스: `docs/interface_spec.md`
-- AI raw 데이터/학습 전략: `docs/ai/ai_architecture.md`
-- LeRobot 전용 매핑/학습: `docs/ai/lerobot_architecture.md`
-- AI 폴더 설명: `ai/README.md`
+1. PVC를 해당 위치에 세우고 그리퍼를 연다.
+2. Xbox `START`로 기록을 시작한다.
+3. D-pad와 LT/RT로 접근하고 `A`로 그리퍼를 닫는다.
+4. PVC를 들어 올린 뒤 `START`를 다시 누른다.
+5. `A=success`, `B=fail`, `X=discard` 중 하나를 선택한다.
+
+두 번째 `START` 시점에 프레임 추가가 멈추므로 라벨 선택 중 정지 화면은 episode에
+들어가지 않는다. HDF5를 닫은 뒤 Indy task teleop이 정지한다.
+
+## 저장 데이터
+
+각 시연은 `episodes/main/pN/episode_<UUID>.h5`로 저장된다. 영상은 별도 MP4가
+아니라 HDF5의 `/obs/rgb`에 `uint8 [T,480,640,3]`으로 들어 있다.
+
+- `/obs/rgb`: overhead RGB
+- `/state/ee_pose`: Indy base 기준 EEF pose
+- `/state/joint_pos`: 6축 관절각 rad
+- `/state/gripper_cmd`: `0=open`, `1=closed`
+- `/time/stamp_*`: RGB, joint, EEF, recorder timestamp
+
+ACT observation state는 EEF XYZ, 6축 관절각, 그리퍼 상태의 10차원이다. 학습 action은
+5 Hz에서 미래 EEF 이동량과 같은 목표 시점의 그리퍼 명령으로 변환한다.
+
+최근 저장 파일은 다음 명령으로 확인한다.
+
+```bash
+find episodes/main -mindepth 2 -maxdepth 2 -name '*.h5' \
+  -printf '%TY-%Tm-%Td %TH:%TM:%TS %p\n' | sort
+```
+
+세부 운영 절차와 QA 기준은 [데이터 수집 가이드](docs/data_collection_guide.md),
+실험 위치·수집량은 [실험 설계](docs/experiment_design.md)를 따른다.

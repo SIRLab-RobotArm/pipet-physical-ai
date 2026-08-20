@@ -1,0 +1,181 @@
+schema_version: 1
+units: mm_deg
+frame: indy_base
+camera_mount:
+  overhead_tilt_deg: null
+positions:
+  grid_1:
+    ee_pose_mm_deg: &id001
+    - 733.688075
+    - 174.986695
+    - 554.58645
+    - 89.99117749999999
+    - -0.00420113789999732
+    - 89.997905
+    taught: false
+    teach:
+      n_samples: 2
+      samples_mm_deg:
+      - - 739.1845
+        - 179.9821
+        - 555.4847
+        - 89.9918
+        - -0.0040334933
+        - 89.99665
+      - - 728.19165
+        - 169.99129
+        - 553.6882
+        - 89.990555
+        - -0.0043687825
+        - 89.99916
+      joint_deg:
+      - - 15.605308000000003
+        - -23.63495
+        - -62.83008600000001
+        - 102.41613
+        - 15.992504
+        - -12.897949
+      - - 15.825715
+        - -22.097637
+        - -65.13294
+        - 99.63958
+        - 16.059292
+        - -10.02138
+      joint_mean_deg:
+      - 15.715511500000002
+      - -22.866293499999998
+      - -63.98151300000001
+      - 101.02785499999999
+      - 16.025897999999998
+      - -11.4596645
+      std_mm_deg:
+      - 5.496424999999988
+      - 4.995405000000005
+      - 0.8982499999999618
+      - 0.0006225000000057435
+      - 0.00016764459999762948
+      - 0.001255000000014661
+      max_dev_mm_deg:
+      - 5.496425000000045
+      - 4.995405000000005
+      - 0.8982499999999618
+      - 0.0006225000000199543
+      - 0.00016764459999762948
+      - 0.001255000000014661
+      xyz_rms_mm: 7.481417777209734
+      xyz_max_mm: 7.481417777209776
+      rot_max_dev_deg: 0.0014108989907041564
+      spread_warning: true
+      updated_utc: '2026-08-09T13:34:36.118202+00:00'
+  grid_2:
+    ee_pose_mm_deg: null
+    taught: false
+  grid_3:
+    ee_pose_mm_deg: null
+    taught: false
+  grid_4:
+    ee_pose_mm_deg: null
+    taught: false
+  grid_5:
+    ee_pose_mm_deg: null
+    taught: false
+  grid_6:
+    ee_pose_mm_deg: null
+    taught: false
+  grid_7:
+    ee_pose_mm_deg: null
+    taught: false
+  grid_8:
+    ee_pose_mm_deg: null
+    taught: false
+  grid_9:
+    ee_pose_mm_deg: null
+    taught: false
+  eval_1:
+    ee_pose_mm_deg: null
+    taught: false
+    mirror_of: grid_5
+  eval_2:
+    ee_pose_mm_deg: *id001
+    taught: false
+    mirror_of: grid_1
+    teach:
+      n_samples: 2
+      samples_mm_deg:
+      - - 739.1845
+        - 179.9821
+        - 555.4847
+        - 89.9918
+        - -0.0040334933
+        - 89.99665
+      - - 728.19165
+        - 169.99129
+        - 553.6882
+        - 89.990555
+        - -0.0043687825
+        - 89.99916
+      joint_deg:
+      - - 15.605308000000003
+        - -23.63495
+        - -62.83008600000001
+        - 102.41613
+        - 15.992504
+        - -12.897949
+      - - 15.825715
+        - -22.097637
+        - -65.13294
+        - 99.63958
+        - 16.059292
+        - -10.02138
+      joint_mean_deg:
+      - 15.715511500000002
+      - -22.866293499999998
+      - -63.98151300000001
+      - 101.02785499999999
+      - 16.025897999999998
+      - -11.4596645
+      std_mm_deg:
+      - 5.496424999999988
+      - 4.995405000000005
+      - 0.8982499999999618
+      - 0.0006225000000057435
+      - 0.00016764459999762948
+      - 0.001255000000014661
+      max_dev_mm_deg:
+      - 5.496425000000045
+      - 4.995405000000005
+      - 0.8982499999999618
+      - 0.0006225000000199543
+      - 0.00016764459999762948
+      - 0.001255000000014661
+      xyz_rms_mm: 7.481417777209734
+      xyz_max_mm: 7.481417777209776
+      rot_max_dev_deg: 0.0014108989907041564
+      spread_warning: true
+      updated_utc: '2026-08-09T13:34:36.118202+00:00'
+  eval_3:
+    ee_pose_mm_deg: null
+    taught: false
+    mirror_of: grid_6
+  eval_4:
+    ee_pose_mm_deg: null
+    taught: false
+    mirror_of: grid_8
+  eval_5:
+    ee_pose_mm_deg: null
+    taught: false
+  eval_6:
+    ee_pose_mm_deg: null
+    taught: false
+  eval_7:
+    ee_pose_mm_deg: null
+    taught: false
+  eval_8:
+    ee_pose_mm_deg: null
+    taught: false
+  pilot_1:
+    ee_pose_mm_deg: null
+    taught: false
+  pilot_2:
+    ee_pose_mm_deg: null
+    taught: false

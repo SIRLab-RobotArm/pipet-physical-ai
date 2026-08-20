@@ -136,7 +136,7 @@ hardware_interface::return_type Mark7SystemHardware::read(
     return hardware_interface::return_type::OK;
   }
 
-  const std::string raw_line = serial_.read_crlf_line(100);
+  const std::string raw_line = serial_.read_crlf_line();
   if (raw_line.empty()) {
     // 타임아웃: 이전 상태 유지
     return hardware_interface::return_type::OK;

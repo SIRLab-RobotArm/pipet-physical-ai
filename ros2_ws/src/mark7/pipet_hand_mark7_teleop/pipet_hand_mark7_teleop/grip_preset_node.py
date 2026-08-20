@@ -19,10 +19,10 @@ class GripPresetNode(Node):
         super().__init__('grip_preset_node')
 
         # Preset parameters (Thumb, Index, Middle, Ring, Pinky, ThumbAb)
-        self.declare_parameter('grasp', [0.0, 0.0, 350.0, 350.0, 350.0, 0.0])
+        self.declare_parameter('grasp', [0.0, 350.0, 350.0, 350.0, 350.0, 0.0])
         self.declare_parameter('open', [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-        self.declare_parameter('press', [150.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-        self.declare_parameter('release', [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        self.declare_parameter('press', [150.0, 0.0, 350.0, 350.0, 350.0, 0.0])
+        self.declare_parameter('release', [0.0, 0.0, 350.0, 350.0, 350.0, 0.0])
 
         # Publisher to forward_position_controller
         self.cmd_pub = self.create_publisher(

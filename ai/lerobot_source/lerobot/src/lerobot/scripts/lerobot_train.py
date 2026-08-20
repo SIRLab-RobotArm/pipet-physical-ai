@@ -15,6 +15,7 @@
 # limitations under the License.
 import dataclasses
 import logging
+import os
 import time
 from contextlib import nullcontext
 from pprint import pformat
@@ -148,6 +149,95 @@ def update_policy(
     train_metrics.lr = optimizer.param_groups[0]["lr"]
     train_metrics.update_s = time.perf_counter() - start_time
     return train_metrics, output_dict
+
+
+class _RamCachedDataset(torch.utils.data.Dataset):
+    """전체 프레임을 1회 디코딩해 RAM 에 적재하는 캐시 래퍼 (pipet 로컬 패치).
+
+    parquet 안 PNG 를 매 step 디코딩하던 CPU 병목을 제거한다.
+    - 이미지 키: uint8 (C,H,W) numpy 배열로 적재(메모리 1/4), 반환 시 float/255 복원.
+    - 비이미지 키: __getitem__ 결과를 그대로 보관(state/action chunk/task 등).
+    픽셀 round-trip 손실 없음(원본이 0~255 정수) → 학습/실성능 영향 없음.
+    DataLoader 워커는 fork copy-on-write 로 numpy 를 공유하므로 메모리는 1벌만 쓴다.
+    """
+
+    def __init__(self, base):
+        import numpy as np
+
+        self.base = base
+        # lerobot meta features 에서 이미지/비디오 키 식별.
+        image_keys = []
+        try:
+            for key, ft in base.meta.features.items():
+                if ft.get("dtype") in ("image", "video"):
+                    image_keys.append(key)
+        except Exception:
+            image_keys = []
+        n = len(base)
+        self._img: dict[str, "np.ndarray"] = {}
+        self._rest: list[dict] = [None] * n
+
+        t0 = time.perf_counter()
+        logging.info(f"[ram-cache] pre-decoding {n} frames (image_keys={image_keys}) ...")
+        # 워커->메인 텐서 전달 시 fd 고갈(ancdata 에러) 방지: file_system 공유 전략.
+        try:
+            import torch.multiprocessing as _mp
+
+            _mp.set_sharing_strategy("file_system")
+        except Exception:
+            pass
+        # 사전 디코딩도 멀티프로세스 워커로 병렬화한다(단일 순회는 너무 느림).
+        # 기본 collate 로 배치 단위 텐서를 받아(키당 fd 1개) 메인이 numpy 에 적재한다.
+        _workers = int(os.environ.get("LEROBOT_RAM_CACHE_WORKERS", "14"))
+        loader = torch.utils.data.DataLoader(
+            base,
+            batch_size=64,
+            num_workers=_workers,
+            shuffle=False,
+            prefetch_factor=4 if _workers > 0 else None,
+        )
+        if not image_keys:
+            raise RuntimeError("[ram-cache] no image keys found in dataset.meta.features")
+        seen = 0
+        for batch in loader:
+            bs = int(batch[image_keys[0]].shape[0])
+            for k in image_keys:
+                arr = (batch[k].detach().clamp(0, 1) * 255.0).round().to(torch.uint8).numpy()
+                if k not in self._img:
+                    self._img[k] = np.empty((n,) + arr.shape[1:], dtype=np.uint8)
+                self._img[k][seen : seen + bs] = arr
+            for j in range(bs):
+                rest = {}
+                for k, v in batch.items():
+                    if k in image_keys:
+                        continue
+                    rest[k] = v[j]
+                self._rest[seen + j] = rest
+            seen += bs
+            if seen % 2048 < 64:
+                logging.info(f"[ram-cache] {seen}/{n} decoded ({time.perf_counter() - t0:.0f}s)")
+        gb = sum(a.nbytes for a in self._img.values()) / 1024**3
+        logging.info(
+            f"[ram-cache] done in {time.perf_counter() - t0:.1f}s, "
+            f"cached {seen} frames, image RAM={gb:.1f}GB"
+        )
+
+    def __len__(self):
+        return len(self._rest)
+
+    def __getitem__(self, idx):
+        out = dict(self._rest[idx])
+        for k, arr in self._img.items():
+            out[k] = torch.from_numpy(arr[idx]).float() / 255.0
+        return out
+
+    def __getattr__(self, name):
+        # 인스턴스 고유 속성(base/_img/_rest 등)은 여기 안 온다.
+        # num_frames/num_episodes/meta/episodes/streaming 등은 원본 dataset 으로 위임.
+        # dunder 는 위임하지 않아 pickle/copy 동작을 깨지 않는다.
+        if name.startswith("__") and name.endswith("__"):
+            raise AttributeError(name)
+        return getattr(self.base, name)
 
 
 @parser.wrap()
@@ -356,6 +446,19 @@ def train(cfg: TrainPipelineConfig, accelerator: Accelerator | None = None):
         shuffle = True
         sampler = None
 
+    # NOTE(pipet): RAM 사전 디코딩 캐시 (LEROBOT_RAM_CACHE=1 일 때).
+    # parquet 안 PNG 이미지를 매 step 디코딩하던 CPU 병목을 제거한다.
+    # 학습 시작 전 전체 프레임을 1회 디코딩해 uint8(C,H,W)로 RAM 에 적재하고,
+    # 이후로는 RAM 에서 바로 꺼내 float/255 로 복원해 반환한다(픽셀 동일 → 실성능 영향 없음).
+    # 워커는 fork copy-on-write 로 numpy 배열을 공유하므로 메모리는 1벌만 쓴다.
+    if os.environ.get("LEROBOT_RAM_CACHE", "0") == "1":
+        dataset = _RamCachedDataset(dataset)
+
+    # NOTE(pipet): CPU 디코딩 병목 완화용 로컬 패치.
+    # - prefetch_factor: 워커당 미리 쌓는 배치 수(기본 2 -> 버퍼 키워 정지 흡수)
+    # - persistent_workers: epoch 경계마다 워커 재생성 비용 제거
+    # 둘 다 환경변수로 조절(LEROBOT_PREFETCH_FACTOR 기본 6).
+    _prefetch_factor = int(os.environ.get("LEROBOT_PREFETCH_FACTOR", "6"))
     dataloader = torch.utils.data.DataLoader(
         dataset,
         num_workers=cfg.num_workers,
@@ -364,7 +467,8 @@ def train(cfg: TrainPipelineConfig, accelerator: Accelerator | None = None):
         sampler=sampler,
         pin_memory=device.type == "cuda",
         drop_last=False,
-        prefetch_factor=2 if cfg.num_workers > 0 else None,
+        prefetch_factor=_prefetch_factor if cfg.num_workers > 0 else None,
+        persistent_workers=cfg.num_workers > 0,
     )
 
     # Prepare everything with accelerator
@@ -429,6 +533,13 @@ def train(cfg: TrainPipelineConfig, accelerator: Accelerator | None = None):
         # increment `step` here.
         step += 1
         if is_main_process:
+            # tqdm 한 줄에 메트릭 표시(INFO 로그는 진행 줄에 묻히기 쉬움)
+            progbar.set_postfix(
+                loss=f"{train_tracker.loss.val:.4f}",
+                lr=f"{train_tracker.lr.val:.1e}",
+                grdn=f"{train_tracker.grad_norm.val:.2f}",
+                refresh=False,
+            )
             progbar.update(1)
         train_tracker.step()
         is_log_step = cfg.log_freq > 0 and step % cfg.log_freq == 0 and is_main_process
@@ -436,7 +547,8 @@ def train(cfg: TrainPipelineConfig, accelerator: Accelerator | None = None):
         is_eval_step = cfg.eval_freq > 0 and step % cfg.eval_freq == 0
 
         if is_log_step:
-            logging.info(train_tracker)
+            # tqdm 진행 줄을 깨지 않고 요약 한 줄 출력(logging.info 만 쓰면 같은 줄에 묻힘)
+            tqdm.write(str(train_tracker))
             if wandb_logger:
                 wandb_log_dict = train_tracker.to_dict()
                 if output_dict:

@@ -14,7 +14,9 @@ class SerialPort
 {
 public:
   static constexpr int DEFAULT_BAUD = 115200;
-  static constexpr int DEFAULT_TIMEOUT_MS = 100;
+  // The ros2_control loop runs at 20 Hz (50 ms period). Keep serial waiting
+  // well below that budget so a missing status packet cannot stall commands.
+  static constexpr int DEFAULT_TIMEOUT_MS = 10;
 
   explicit SerialPort(
     const std::string & device_path = "/dev/ttyACM0",
@@ -54,6 +56,7 @@ private:
   std::string device_path_;
   int baud_rate_;
   int fd_;  ///< 파일 디스크립터 (-1 = 닫힘)
+  std::string rx_buffer_;  ///< 제어 주기를 넘겨 보존하는 부분 수신 데이터
 };
 
 }  // namespace pipet_hand_mark7_driver
