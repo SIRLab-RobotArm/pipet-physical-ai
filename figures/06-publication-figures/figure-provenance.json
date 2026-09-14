@@ -1,0 +1,61 @@
+{
+  "generator": null,
+  "generator_note": "The original figure-generation script is not included in this repository.",
+  "figure_width_mm": 120,
+  "png_dpi": 600,
+  "cad_coordinate_min_mm": [
+    -100.06934356689453,
+    -28.282203674316406,
+    -8.802460982337834e-09
+  ],
+  "cad_coordinate_max_mm": [
+    57.0813102722168,
+    30.621496200561523,
+    176.64608764648438
+  ],
+  "cad_dimensions_width_depth_length_mm": [
+    157.15065383911133,
+    58.90369987487793,
+    176.64608765528683
+  ],
+  "measurement_type": "Axis-aligned envelope of all supplied STL meshes in stored common coordinates; not a physical measurement.",
+  "units_evidence": "hand_final_for_urdf.xacro uses mesh scale 0.001 to convert STL coordinates to metres.",
+  "photo_processing": "Rectangular crop and export resampling only; no retouching or AI synthesis. GPS metadata was removed from repository source photographs without changing the compressed image data.",
+  "photo_crops_ltrb": {
+    "figures/05-gripper-grasp/open-hand-with-target-02.jpg": [
+      650,
+      470,
+      3750,
+      2330
+    ],
+    "figures/05-gripper-grasp/cylinder-grasp-01.jpg": [
+      870,
+      510,
+      3970,
+      2370
+    ]
+  },
+  "cad_rendering": "Orthographic shaded surfaces, back-face culling and triangle-centroid depth ordering; equal scale in both views. Surfaces rasterized; annotations vector in PDF/SVG.",
+  "cad_source_note": "The external CAD source package used for rendering is not included in this repository.",
+  "renamed_photo_sources": {
+    "KakaoTalk_20260914_090207422_01.jpg": "figures/05-gripper-grasp/open-hand-with-target-02.jpg",
+    "KakaoTalk_20260914_090207422_04.jpg": "figures/05-gripper-grasp/cylinder-grasp-01.jpg"
+  },
+  "sha256": {
+    "figures/05-gripper-grasp/open-hand-with-target-02.jpg": "3ed8537574d0e3fe3fcaea552c0da4b4f219d4873ce7433f1e66556cebaa72f1",
+    "figures/05-gripper-grasp/cylinder-grasp-01.jpg": "69c489120145903d3d3243491a429b558ed04e727f58d218001b1fbb8313212e",
+    "external-cad-assets/meshes/base_link.stl": "d1ac7b7243a26cc34da96bee3b031ccd4dab46f216d8a8525146c8abad011de7",
+    "external-cad-assets/meshes/index_1_1.stl": "428879ee2b31602bc7320f69e34cc39382f632595dd267e3ae5d90067f6fb19b",
+    "external-cad-assets/meshes/index_2_1.stl": "140553a1b2b6c56334d9b995e8c1abe958348826818750c4b7754f9a5b1d5d6a",
+    "external-cad-assets/meshes/little_1_1.stl": "269154abcad93856f8497760af07fc2711b3188da48b7400c4ef4eeefc96578e",
+    "external-cad-assets/meshes/little_2_1.stl": "0ef6a130a2c4608391062b12f53f120529501788611e48323f772784e88ddbf3",
+    "external-cad-assets/meshes/middle_1_1.stl": "2933fd26449b946a2ebad15e4b175343c497e1d3a23489aea646a95b29c0e80e",
+    "external-cad-assets/meshes/middle_2_1.stl": "e4aabe8bd052c52ebcc6dbae2dfe3c3cfb4a6dfcdb5b279dc6c36d9c9d4d0f63",
+    "external-cad-assets/meshes/palm_link_1.stl": "efa9db13cade8e7ff7e045a8680b84e214b58105fc49b48d59b6627d82b34970",
+    "external-cad-assets/meshes/ring_1_1.stl": "0424f91a4602258a27f2c676ab1e0102d9937378068ca1b0e35e88ca0e5449dd",
+    "external-cad-assets/meshes/ring_2_1.stl": "7a3f8960af02530af3b9245c77d185ca83df36cd739320db252fd6c9d90f0ed2",
+    "external-cad-assets/meshes/thumb_1_1.stl": "1d80d3e965cd9633bcbdd730fb70e54c5fc99f441683481185b3c3e294b29f5c",
+    "external-cad-assets/meshes/thumb_2_1.stl": "e03b88ce4a97061ab5e914784bf142064b8d785f11ea8a6a1c2505cec751b276",
+    "external-cad-assets/meshes/thumb_3_1.stl": "b01ac5c04a406dea3904ea42a92bfa78c306ecdb59bc3b8742ee283dfd2624ad"
+  }
+}
